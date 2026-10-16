@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全銀システム模擬コンソール</title>
+<style>
+:root{
+  --bg:#f4f2ec; --panel:#fffdf8; --ink:#1d2321; --muted:#6b706c; --line:#ddd8cc;
+  --accent:#0f5c4d; --accent-soft:#e0eee9; --warn:#a4570b; --warn-soft:#fbeedd;
+  --bad:#a12b2b; --bad-soft:#f8e2e0; --good:#2f6e2f;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#151817; --panel:#1d2120; --ink:#e7e5df; --muted:#9a9f9b; --line:#323836;
+    --accent:#5fbfa6; --accent-soft:#1f3631; --warn:#e3a35b; --warn-soft:#3a2c1a;
+    --bad:#ec7a7a; --bad-soft:#3a2020; --good:#83c983; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 "Hiragino Sans","Noto Sans JP","Yu Gothic UI",sans-serif}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:16px 28px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+header h1{font-size:16px;margin:0;letter-spacing:.04em}
+header h1 small{display:block;font-size:11px;color:var(--muted);font-weight:400;letter-spacing:0}
+.clock{font-family:var(--mono);font-size:22px;font-weight:600}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.pill.core{background:var(--accent-soft);color:var(--accent)} .pill.more{background:var(--warn-soft);color:var(--warn)}
+.pill.down{background:var(--bad-soft);color:var(--bad)}
+.ctrls{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+main{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;padding:16px 20px 40px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+section h2{font-size:13px;margin:0 0 10px;color:var(--muted);font-weight:600;letter-spacing:.06em}
+.c12{grid-column:span 12}.c8{grid-column:span 8}.c7{grid-column:span 7}.c5{grid-column:span 5}.c4{grid-column:span 4}
+@media (max-width:1000px){.c8,.c7,.c5,.c4{grid-column:span 12}}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:11.5px}
+td.n{text-align:right;font-family:var(--mono)}
+.scroll{overflow:auto;max-height:360px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.kpi b{display:block;font-family:var(--mono);font-size:18px}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;min-width:80px}
+.bar i{display:block;height:100%;background:var(--accent)} .bar i.hot{background:var(--warn)} .bar i.over{background:var(--bad)}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+form label{font-size:11.5px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+select,input{width:100%;font:inherit;font-size:13px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);min-width:0}
+form .full{grid-column:span 2}
+.msg{font-size:12.5px;margin-top:8px;min-height:1.2em}
+.log{font-family:var(--mono);font-size:11.5px;max-height:420px;overflow:auto}
+.log div{padding:2px 0;border-bottom:1px dotted var(--line)}
+.log .cat{display:inline-block;width:70px;color:var(--accent)}
+.log .cat.ERROR,.log .cat.RISK{color:var(--bad)} .log .cat.RTGS,.log .cat.SETTLE{color:var(--warn)}
+.st{font-size:11.5px;padding:1px 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.st.w{background:var(--warn-soft);color:var(--warn)} .st.b{background:var(--bad-soft);color:var(--bad)}
+.note{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>全銀システム 模擬コンソール<small>学習用シミュレータ・架空の金融機関</small></h1>
+  <div><div class="clock" id="clock">--</div><div id="svc"></div></div>
+  <div class="ctrls">
+    <button onclick="adv(10)">+10分</button>
+    <button onclick="adv(60)">+1時間</button>
+    <button onclick="advTo('15:30')">→15:30</button>
+    <button onclick="advTo('16:15')" class="primary">→16:15 決済</button>
+    <button onclick="nextBizMorning()">→翌朝 8:30</button>
+    <button onclick="rnd(100,0)">ランダム振込×100</button>
+    <button onclick="rnd(20,0.2)">大口混在×20</button>
+    <button onclick="post('/api/reset',{})">リセット</button>
+  </div>
+</header>
+<main>
+  <section class="c12"><h2>概況</h2><div class="kpis" id="kpis"></div></section>
+
+  <section class="c8"><h2>清算参加者（日銀当預・仕向超過限度額）</h2>
+    <div style="overflow:auto"><table id="parts"></table></div>
+    <p class="note">ネット = 受取 − 支払（決済日ベース）。棒は仕向超過額 ÷ 限度額。代行決済委託先は委託先の清算参加者に合算されます。</p>
+  </section>
+
+  <section class="c4"><h2>振込を依頼する</h2>
+    <form id="tf" onsubmit="sendTf(event)">
+      <label>仕向銀行<select id="fb" onchange="fillAccts('fb','fa')"></select></label>
+      <label>依頼人口座<select id="fa"></select></label>
+      <label>被仕向銀行<select id="tb" onchange="fillAccts('tb','ta')"></select></label>
+      <label>受取人口座<select id="ta"></select></label>
+      <label class="full">金額（円）<input id="amt" type="number" min="1" value="100000"></label>
+      <label class="full">EDI情報（任意・20桁）<input id="edi" maxlength="20" placeholder="INV-2026-0001"></label>
+      <button class="primary full">送信</button>
+    </form>
+    <div class="msg" id="tfmsg"></div>
+    <h2 style="margin-top:16px">障害・資金操作</h2>
+    <form onsubmit="return false">
+      <label>銀行<select id="rcb"></select></label>
+      <label>&nbsp;<span><button type="button" onclick="rc(false)">RC停止</button> <button type="button" onclick="rc(true)">RC復旧</button></span></label>
+      <label>日銀当預へ入金（億円）<input id="inj" type="number" value="10"></label>
+      <label>&nbsp;<button type="button" onclick="inject()">入金</button></label>
+      <label class="full"><span><button type="button" onclick="center('core_up')">コアタイム系 停止/再開</button> <button type="button" onclick="center('more_up')">モアタイム系 停止/再開</button></span></label>
+    </form>
+  </section>
+
+  <section class="c7"><h2>取引（新しい順）</h2><div class="scroll"><table id="txs"></table></div></section>
+  <section class="c5"><h2>ネッティング（当決済日）</h2><div id="net"></div>
+    <h2 style="margin-top:14px">決済履歴</h2><div id="settle" class="note"></div></section>
+
+  <section class="c12"><h2>イベントログ</h2><div class="log" id="log"></div></section>
+</main>
+<script>
+let S=null, paused=false;
+const yen=n=>(n<0?'-':'')+Math.abs(n).toLocaleString('ja-JP')+'円';
+const oku=n=>(n/1e8).toLocaleString('ja-JP',{maximumFractionDigits:2})+'億';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json();await load();return j;}
+async function load(){const r=await fetch('/api/state');S=await r.json();render();}
+function adv(m){post('/api/advance',{minutes:m});}
+function advTo(hm){const d=S.now.slice(0,10);let t=d+'T'+hm;if(t<=S.now.replace(' ','T'))return alert('すでに過ぎています');post('/api/advance',{to:t});}
+function nextBizMorning(){const d=new Date(S.now.replace(' ','T'));d.setDate(d.getDate()+1);d.setHours(8,30,0,0);
+  const p=x=>String(x).padStart(2,'0');post('/api/advance',{to:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T08:30`});}
+function rnd(n,l){post('/api/random',{count:n,large_ratio:l});}
+function rc(up){post('/api/rc',{bank:document.getElementById('rcb').value,up});}
+function inject(){post('/api/boj',{bank:document.getElementById('rcb').value,amount:Math.round(+document.getElementById('inj').value*1e8)});}
+function center(k){const b={};b[k]=!S[k];post('/api/center',b);}
+function stCls(s){return /保留|待ち|予約|滞留|未着/.test(s)?'w':/不受理|返却|不成立/.test(s)?'b':'';}
+let banksFilled=false;
+function fillBanks(){
+  if(banksFilled)return;banksFilled=true;
+  for(const id of ['fb','tb','rcb']){const el=document.getElementById(id);
+    S.participants.forEach(p=>el.add(new Option(p.code+' '+p.name,p.code)));}
+  document.getElementById('tb').selectedIndex=1;fillAccts('fb','fa');fillAccts('tb','ta');
+}
+function fillAccts(b,a){const p=S.participants.find(x=>x.code==document.getElementById(b).value);const el=document.getElementById(a);const keep=el.value;el.innerHTML='';
+  p.accounts.forEach(x=>el.add(new Option(`${x.branch}-${x.type==1?'普':'当'}-${x.no} ${x.holder} (${yen(x.balance)})`,`${x.branch}|${x.type}|${x.no}`)));if(keep)el.value=keep;}
+async function sendTf(e){e.preventDefault();const [fb,fa,tb,ta]=['fb','fa','tb','ta'].map(i=>document.getElementById(i).value);
+  const [f1,f2,f3]=fa.split('|'),[t1,t2,t3]=ta.split('|');
+  const j=await post('/api/transfer',{from_bank:fb,from_branch:f1,from_type:f2,from_no:f3,to_bank:tb,to_branch:t1,to_type:t2,to_no:t3,amount:+document.getElementById('amt').value,edi:document.getElementById('edi').value});
+  document.getElementById('tfmsg').innerHTML=j.error?`<span class="neg">${esc(j.error)}</span>`:`結果: <span class="st ${stCls(j.status)}">${esc(j.status)}</span> ${esc(j.note||'')}`;
+  fillAccts('fb','fa');fillAccts('tb','ta');}
+function render(){
+  document.getElementById('clock').textContent=S.now+' ('+S.weekday+')';
+  const svc=S.service=='core'?'<span class="pill core">コアタイム</span>':'<span class="pill more">モアタイム</span>';
+  const down=(!S.core_up?' <span class="pill down">コア系停止</span>':'')+(!S.more_up?' <span class="pill down">モア系停止</span>':'');
+  document.getElementById('svc').innerHTML=svc+down+` <span class="note">決済日 ${S.settlement_date}${S.business_day?'':'（非営業日）'}</span>`;
+  const st=S.stats,q=S.queues,n=S.netting;
+  document.getElementById('kpis').innerHTML=[
+    ['受付電文',st.received||0],['小口計上',st.small||0],['大口RTGS',st.rtgs||0],['保留(限度額)',q.held],
+    ['予約',q.reserved],['RTGS待ち',q.rtgs],['未着(再送待ち)',q.undelivered],['不受理',st.rejected||0],
+    ['当日グロス',oku(n.total_gross)],['ネット決済額',oku(n.total_net)],['圧縮率',(n.reduction*100).toFixed(1)+'%']
+  ].map(([k,v])=>`<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+  document.getElementById('parts').innerHTML='<tr><th>コード</th><th>名称</th><th>区分</th><th>MT</th><th>RC</th><th>日銀当預</th><th>ネット</th><th>仕向超過/限度額</th><th>担保</th></tr>'+
+    S.participants.map(p=>{const rcs=p.rc_up?'<span class="pos">●</span>':`<span class="neg">停止(${p.outbox})</span>`;
+      if(p.ptype!='清算参加者')return `<tr><td>${p.code}</td><td>${esc(p.name)}<br><span class="note">${esc(p.institution)}</span></td><td colspan="2">代行→${p.settles_via} ${p.moretime?'':'<span class="note">MT非参加</span>'}</td><td>${rcs}</td><td colspan="4" class="note">委託先で決済</td></tr>`;
+      const r=p.cap?p.net_debit/p.cap:0,cls=r>1?'over':r>.8?'hot':'';
+      return `<tr><td>${p.code}</td><td>${esc(p.name)}<br><span class="note">${esc(p.institution)}</span></td><td>清算参加者</td><td>${p.moretime?'○':'×'}</td><td>${rcs}</td>
+      <td class="n">${oku(p.boj)}</td><td class="n ${p.net>=0?'pos':'neg'}">${yen(p.net)}</td>
+      <td><div class="bar"><i class="${cls}" style="width:${Math.min(100,r*100)}%"></i></div><span class="note">${oku(p.net_debit)} / ${oku(p.cap)}</span></td><td class="n">${oku(p.collateral)}</td></tr>`}).join('');
+  document.getElementById('txs').innerHTML='<tr><th>取引ID</th><th>種別</th><th>経路</th><th class="n">金額</th><th>系</th><th>決済日</th><th>状態</th></tr>'+
+    S.transactions.map(t=>`<tr title="${esc(t.history.map(h=>h.join(' ')).join('\n'))}"><td>${t.tx_id}</td><td>${{1001:'振込',1002:'振込EDI',2001:'組戻依頼',2002:'組戻応答',3001:'返却'}[t.type]||t.type}</td>
+     <td>${t.from}→${t.to}</td><td class="n">${yen(t.amount)}</td><td>${t.channel}</td><td>${t.settlement_date||''}</td><td><span class="st ${stCls(t.status)}">${esc(t.status)}</span></td></tr>`).join('');
+  document.getElementById('net').innerHTML='<table><tr><th>参加者</th><th class="n">支払</th><th class="n">受取</th><th class="n">差額</th></tr>'+
+    n.rows.map(r=>`<tr><td>${r.code}</td><td class="n">${oku(r.sent)}</td><td class="n">${oku(r.recv)}</td><td class="n ${r.net>=0?'pos':'neg'}">${yen(r.net)}</td></tr>`).join('')+'</table>';
+  document.getElementById('settle').innerHTML=S.settlements.length?S.settlements.map(s=>`<div>${esc(s.summary)}</div>`).join(''):'まだ決済はありません（16:15 に自動実行）';
+  document.getElementById('log').innerHTML=S.events.map(e=>`<div>${e.ts.slice(5)} <span class="cat ${e.cat}">${e.cat}</span>${esc(e.msg)}</div>`).join('');
+  fillBanks();
+}
+load();setInterval(()=>{if(!document.hidden)load();},3000);
+</script>
+</body>
+</html>
